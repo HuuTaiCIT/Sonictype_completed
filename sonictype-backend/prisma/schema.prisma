@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String         @id @default(uuid())
+  username     String         @unique
+  passwordHash String
+  role         Role           @default(PLAYER)
+  createdAt    DateTime       @default(now())
+  matchHistory MatchHistory[]
+}
+
+model MatchHistory {
+  id        String   @id @default(uuid())
+  wpm       Int
+  accuracy  Float
+  mode      GameMode @default(SOLO)
+  playedAt  DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+}
+
+enum Role {
+  PLAYER
+  ADMIN
+}
+
+enum GameMode {
+  SOLO
+  RANKED
+}
