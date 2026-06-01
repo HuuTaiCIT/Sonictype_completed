@@ -34,3 +34,8 @@ enum GameMode {
   SOLO
   RANKED
 }
+
+model RaceText {
+  id      String @id @default(uuid())
+  content String
+}

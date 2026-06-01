@@ -16,6 +16,8 @@ const NEWS_ARTICLES = [
 	"The rapid development of artificial intelligence is reshaping industries across the globe. Experts predict that AI will create new job opportunities while automating repetitive tasks.",
 	"Global markets rallied today following positive economic data. Investors are optimistic about the upcoming quarter, expecting strong earnings reports from tech giants.",
 	"Space exploration took a giant leap forward as the new rover successfully landed on Mars. Scientists are eager to analyze the soil samples for signs of ancient life.",
+	"The history of the modern computer keyboard begins with the invention of the typewriter. Christopher Latham Sholes patented the QWERTY layout in 1868, a design that was originally created to prevent mechanical jams by separating commonly used letter pairs. Today, despite the absence of mechanical arms, QWERTY remains the global standard for typing.",
+	"In a stunning comeback, the underdog team managed to secure a victory in the final minutes of the championship match. Fans erupted in cheers as the winning goal was scored, cementing this game as one of the most memorable in the history of the sport."
 ];
 
 // 1. Khởi tạo các công cụ
@@ -147,17 +149,25 @@ io.on("connection", (socket) => {
 	});
 
 	// 6. PHÁT LỆNH BẮT ĐẦU VÀ CHỌN BÀI BÁO
-	socket.on("startRace", ({ roomId }) => {
+	socket.on("startRace", async ({ roomId }) => {
 		const roomIndex = activeRooms.findIndex((r) => r.id === roomId);
 		if (roomIndex !== -1) {
 			activeRooms[roomIndex].status = "in-progress";
 
-			// Bốc ngẫu nhiên 1 bài báo để gửi cho tất cả
-			const randomText =
-				NEWS_ARTICLES[Math.floor(Math.random() * NEWS_ARTICLES.length)];
-			console.log(`🚀 Bắt đầu đua phòng ${activeRooms[roomIndex].name}!`);
+			// Bốc ngẫu nhiên 1 bài báo từ DB
+			try {
+				const texts = await prisma.raceText.findMany();
+				const randomTextObj = texts[Math.floor(Math.random() * texts.length)];
+				const randomText = randomTextObj ? randomTextObj.content : NEWS_ARTICLES[0];
 
-			io.to(roomId).emit("raceStarted", randomText);
+				console.log(`🚀 Bắt đầu đua phòng ${activeRooms[roomIndex].name}!`);
+				io.to(roomId).emit("raceStarted", randomText);
+			} catch (error) {
+				console.error("Lỗi lấy văn bản từ DB, dùng mặc định:", error);
+				const randomText = NEWS_ARTICLES[Math.floor(Math.random() * NEWS_ARTICLES.length)];
+				io.to(roomId).emit("raceStarted", randomText);
+			}
+
 			io.emit("updateRooms", activeRooms);
 		}
 	});
@@ -201,6 +211,34 @@ const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+// Auto-seed Database on Startup
+const initDB = async () => {
+	try {
+		const count = await prisma.raceText.count();
+		if (count === 0) {
+			console.log("🌱 Bắt đầu seed dữ liệu RaceText...");
+			await prisma.raceText.createMany({
+				data: NEWS_ARTICLES.map(content => ({ content }))
+			});
+			console.log("✅ Đã seed dữ liệu RaceText thành công!");
+		}
+
+		// Seed Admin Account (Upsert để ép password = admin và role = ADMIN)
+		console.log("👑 Cập nhật tài khoản admin/admin...");
+		const saltRounds = 10;
+		const hashedPassword = await bcrypt.hash("admin", saltRounds);
+		await prisma.user.upsert({
+			where: { username: "admin" },
+			update: { passwordHash: hashedPassword, role: "ADMIN" },
+			create: { username: "admin", passwordHash: hashedPassword, role: "ADMIN" },
+		});
+		console.log("✅ Đã tạo/cập nhật tài khoản admin thành công!");
+	} catch (error) {
+		console.error("Lỗi auto-seed:", error);
+	}
+};
+initDB();
+
 const PORT = process.env.PORT || 5001;
 
 // 2. Cài đặt Middleware
@@ -210,7 +248,7 @@ app.use(express.json());
 // 3. API test
 app.get("/", (req: Request, res: Response) => {
 	res.send(
-		"Chào mừng đến với Backend của SonicType! Server đang chạy rất mượt 🚀",
+		"Welcome to the SonicType Backend! The server is running smoothly 🚀",
 	);
 });
 
@@ -219,7 +257,7 @@ app.get("/api/users", async (req: Request, res: Response) => {
 		const users = await prisma.user.findMany();
 		res.json(users);
 	} catch (error) {
-		res.status(500).json({ error: "Lỗi khi lấy dữ liệu từ Database" });
+		res.status(500).json({ error: "Error fetching data from Database" });
 	}
 });
 
@@ -302,12 +340,12 @@ app.post("/api/matches", async (req: Request, res: Response) => {
 		});
 
 		res.status(201).json({
-			message: "Lưu điểm thành công! 🏆",
+			message: "Score saved successfully! 🏆",
 			match: newMatch,
 		});
 	} catch (error) {
 		res.status(400).json({
-			error: "Lỗi khi lưu điểm. Vui lòng kiểm tra lại!",
+			error: "Error saving score. Please check your data!",
 		});
 	}
 });
@@ -322,7 +360,7 @@ app.get("/api/matches/leaderboard", async (req: Request, res: Response) => {
 		});
 		res.status(200).json(topMatches);
 	} catch (error) {
-		res.status(500).json({ error: "Lỗi khi lấy Bảng xếp hạng." });
+		res.status(500).json({ error: "Error fetching Leaderboard." });
 	}
 });
 
@@ -368,7 +406,20 @@ app.get("/api/users/:userId/stats", async (req: Request, res: Response) => {
 		});
 	} catch (error) {
 		console.error(error); // 👈 Báo log cụ thể ở server nếu bị lỗi 500
-		res.status(500).json({ error: "Lỗi khi lấy thống kê cá nhân." });
+		res.status(500).json({ error: "Error fetching personal statistics." });
+	}
+});
+
+// API Lấy văn bản ngẫu nhiên
+app.get("/api/texts/random", async (req: Request, res: Response) => {
+	try {
+		const texts = await prisma.raceText.findMany();
+		const randomTextObj = texts[Math.floor(Math.random() * texts.length)];
+		const randomText = randomTextObj ? randomTextObj.content : NEWS_ARTICLES[0];
+		res.json({ text: randomText });
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ error: "Error fetching random text" });
 	}
 });
 
@@ -404,6 +455,7 @@ app.get("/api/admin/stats", async (req: Request, res: Response) => {
 
 				return {
 					username: u.username,
+					role: u.role,
 					bestWpm: best ? best.wpm : 0,
 					status: isOnline ? "ONLINE" : "OFFLINE",
 				};
@@ -417,8 +469,8 @@ app.get("/api/admin/stats", async (req: Request, res: Response) => {
 			recentUsers,
 		});
 	} catch (error) {
-		console.error("Lỗi Admin Stats:", error);
-		res.status(500).json({ error: "Lỗi máy chủ Admin" });
+		console.error("Admin Stats Error:", error);
+		res.status(500).json({ error: "Admin server error" });
 	}
 });
 
@@ -437,10 +489,28 @@ app.delete(
 				});
 				await prisma.user.delete({ where: { username } });
 			}
-			res.json({ message: "Trảm thành công!" });
+			res.json({ message: "User deleted successfully!" });
 		} catch (error) {
-			console.error("Lỗi xóa User:", error);
-			res.status(500).json({ error: "Không thể xóa người dùng này." });
+			console.error("Delete User Error:", error);
+			res.status(500).json({ error: "Could not delete this user." });
+		}
+	},
+);
+
+// 3. API Nâng quyền tài khoản lên ADMIN
+app.put(
+	"/api/admin/users/:username/role",
+	async (req: Request, res: Response) => {
+		try {
+			const username = req.params.username;
+			await prisma.user.update({
+				where: { username },
+				data: { role: "ADMIN" },
+			});
+			res.json({ message: "User promoted to ADMIN successfully!" });
+		} catch (error) {
+			console.error("Promote User Error:", error);
+			res.status(500).json({ error: "Could not promote this user." });
 		}
 	},
 );
