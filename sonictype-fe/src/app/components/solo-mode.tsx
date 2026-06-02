@@ -111,6 +111,12 @@ export function SoloMode({ onBack }: SoloModeProps) {
     fetchRandomText();
   };
 
+  const handleGiveUp = () => {
+    if (window.confirm("Are you sure you want to give up? You will lose this race.")) {
+      onBack();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] relative overflow-hidden">
       {/* Animated background effects */}
@@ -160,14 +166,26 @@ export function SoloMode({ onBack }: SoloModeProps) {
             <span className="text-white"> MODE</span>
           </h1>
 
-          <Button
-            onClick={handleRestart}
-            variant="ghost"
-            className="text-gray-400 hover:text-[#ffd700]"
-          >
-            <RotateCcw className="w-5 h-5 mr-2" />
-            Restart
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleRestart}
+              variant="ghost"
+              className="text-gray-400 hover:text-[#ffd700]"
+            >
+              <RotateCcw className="w-5 h-5 mr-2" />
+              Restart
+            </Button>
+
+            {!state.isFinished && countdown === null && (
+              <Button
+                onClick={handleGiveUp}
+                variant="destructive"
+                className="font-bold shadow-lg shadow-red-500/20 ml-2"
+              >
+                Give Up
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

@@ -94,6 +94,12 @@ export function MultiplayerRace({ room, username, initialText, onLeave }: Multip
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyPress, state.isFinished, countdown]);
 
+  const handleGiveUp = () => {
+    if (window.confirm("Are you sure you want to give up? You will leave the room.")) {
+      onLeave();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] relative overflow-hidden">
       {/* Animated background effects */}
@@ -142,7 +148,17 @@ export function MultiplayerRace({ room, username, initialText, onLeave }: Multip
             </span>
           </h1>
 
-          <div className="w-24"></div>
+          <div className="w-24">
+            {!state.isFinished && countdown === null && (
+              <Button
+                onClick={handleGiveUp}
+                variant="destructive"
+                className="font-bold shadow-lg shadow-red-500/20"
+              >
+                Give Up
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

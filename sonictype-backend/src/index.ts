@@ -53,6 +53,7 @@ io.on("connection", (socket) => {
 
 	// 2. Nhận yêu cầu TẠO PHÒNG từ Frontend
 	socket.on("createRoom", (roomData) => {
+		socket.data.username = roomData.host;
 		const newRoom = {
 			id: Math.random().toString(36).substring(2, 9),
 			name: roomData.name,
@@ -79,6 +80,7 @@ io.on("connection", (socket) => {
 
 	// 3. Nhận yêu cầu THAM GIA PHÒNG từ Frontend
 	socket.on("joinRoom", ({ roomId, username }) => {
+		socket.data.username = username;
 		const roomIndex = activeRooms.findIndex((r) => r.id === roomId);
 
 		if (roomIndex !== -1) {
@@ -193,15 +195,43 @@ io.on("connection", (socket) => {
 	// 5. KHI TẮT TRÌNH DUYỆT (DISCONNECT)
 	socket.on("disconnect", () => {
 		console.log(`❌ Tay đua đã ngắt kết nối: ${socket.id}`);
+		const username = socket.data.username;
 
-		const initialRoomsCount = activeRooms.length;
-		activeRooms = activeRooms.filter(
-			(room) => room.hostSocketId !== socket.id,
-		);
+		if (username) {
+			let roomUpdated = false;
 
-		if (activeRooms.length !== initialRoomsCount) {
-			console.log("🧹 Đã dọn dẹp phòng của người chơi vừa thoát.");
-			io.emit("updateRooms", activeRooms);
+			activeRooms.forEach((room) => {
+				if (room.players.includes(username)) {
+					room.players = room.players.filter((p: string) => p !== username);
+					if (room.readyPlayers) {
+						room.readyPlayers = room.readyPlayers.filter((p: string) => p !== username);
+					}
+
+					if (room.players.length === 0) {
+						(room as any).toBeDeleted = true;
+					} else if (room.host === username) {
+						room.host = room.players[0];
+					}
+					io.to(room.id).emit("playerLeft", username);
+					roomUpdated = true;
+				}
+			});
+
+			if (roomUpdated) {
+				const initialCount = activeRooms.length;
+				activeRooms = activeRooms.filter((r) => !(r as any).toBeDeleted);
+				io.emit("updateRooms", activeRooms);
+				console.log(`🧹 Đã dọn dẹp phòng hoặc cập nhật chủ phòng do ${username} thoát.`);
+			}
+		} else {
+			// Fallback cũ nếu không có username
+			const initialRoomsCount = activeRooms.length;
+			activeRooms = activeRooms.filter(
+				(room) => room.hostSocketId !== socket.id,
+			);
+			if (activeRooms.length !== initialRoomsCount) {
+				io.emit("updateRooms", activeRooms);
+			}
 		}
 	});
 });
