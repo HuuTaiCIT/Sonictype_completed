@@ -70,7 +70,7 @@ export function MultiplayerRace({ room, username, initialText, onLeave }: Multip
               userId: userObj.id,
               wpm: state.stats.wpm,
               accuracy: state.stats.accuracy,
-              mode: "RANK",
+              mode: "RANKED",
             }),
           }).catch((err) => console.error(err));
         } catch (e) {

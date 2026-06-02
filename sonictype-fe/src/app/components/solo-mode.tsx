@@ -69,6 +69,30 @@ export function SoloMode({ onBack }: SoloModeProps) {
     }
   }, [selectedText, reset]);
 
+  // Lưu điểm khi hoàn thành trận đua Solo
+  useEffect(() => {
+    if (state.isFinished) {
+      const userStr = localStorage.getItem("sonictype_user");
+      if (userStr) {
+        try {
+          const userObj = JSON.parse(userStr);
+          fetch("http://localhost:5000/api/matches", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: userObj.id,
+              wpm: state.stats.wpm,
+              accuracy: state.stats.accuracy,
+              mode: "SOLO",
+            }),
+          }).catch((err) => console.error(err));
+        } catch (e) {
+          console.error("Lỗi phân tích JSON localStorage:", e);
+        }
+      }
+    }
+  }, [state.isFinished, state.stats.wpm, state.stats.accuracy]);
+
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
