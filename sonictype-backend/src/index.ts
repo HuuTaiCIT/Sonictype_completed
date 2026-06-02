@@ -353,13 +353,34 @@ app.post("/api/matches", async (req: Request, res: Response) => {
 // API Bảng xếp hạng
 app.get("/api/matches/leaderboard", async (req: Request, res: Response) => {
 	try {
-		const topMatches = await prisma.matchHistory.findMany({
-			orderBy: { wpm: "desc" },
-			take: 10,
-			include: { user: { select: { username: true } } },
+		// Lấy tất cả user kèm theo trận đấu có WPM cao nhất của họ
+		const usersWithBestMatch = await prisma.user.findMany({
+			include: {
+				matchHistory: {
+					orderBy: { wpm: "desc" },
+					take: 1,
+				},
+			},
 		});
+
+		// Lọc ra những user đã từng chơi, format lại và sắp xếp
+		const topMatches = usersWithBestMatch
+			.filter((u) => u.matchHistory.length > 0)
+			.map((u) => ({
+				id: u.matchHistory[0].id,
+				userId: u.id,
+				wpm: u.matchHistory[0].wpm,
+				accuracy: u.matchHistory[0].accuracy,
+				mode: u.matchHistory[0].mode,
+				createdAt: u.matchHistory[0].playedAt,
+				user: { username: u.username },
+			}))
+			.sort((a, b) => b.wpm - a.wpm)
+			.slice(0, 10);
+
 		res.status(200).json(topMatches);
 	} catch (error) {
+		console.error("Lỗi lấy Leaderboard:", error);
 		res.status(500).json({ error: "Error fetching Leaderboard." });
 	}
 });
