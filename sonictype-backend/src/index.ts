@@ -570,9 +570,9 @@ app.get("/api/admin/texts", async (req: Request, res: Response) => {
 	try {
 		const texts = await prisma.raceText.findMany();
 		res.json(texts);
-	} catch (error) {
+	} catch (error: any) {
 		console.error("Lỗi lấy danh sách văn bản:", error);
-		res.status(500).json({ error: "Could not fetch texts." });
+		res.status(500).json({ error: "Could not fetch texts.", message: error.message, stack: error.stack });
 	}
 });
 
@@ -633,3 +633,5 @@ httpServer.listen(PORT, () => {
 	console.log(`✅ Server SonicType đang chạy tại http://localhost:${PORT}`);
 	console.log(`⚡ Trạm phát sóng Real-time đã mở!`);
 });
+
+// Trigger nodemon restart

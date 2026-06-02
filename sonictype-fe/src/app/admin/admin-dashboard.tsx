@@ -68,7 +68,12 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 		try {
 			const res = await fetch("http://localhost:5000/api/admin/texts");
 			const data = await res.json();
-			setTexts(data);
+			if (Array.isArray(data)) {
+				setTexts(data);
+			} else {
+				console.error("API did not return an array:", data);
+				setTexts([]);
+			}
 		} catch (error) {
 			console.error("Lỗi lấy danh sách văn bản:", error);
 		} finally {
