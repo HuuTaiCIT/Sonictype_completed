@@ -7,7 +7,12 @@ import {
 	Trash2,
 	Users,
 	ArrowUpCircle,
-	Loader2
+	Loader2,
+	FileText,
+	Edit,
+	Plus,
+	Save,
+	X
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -26,6 +31,15 @@ interface AdminStats {
 export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	const [stats, setStats] = useState<AdminStats | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [activeTab, setActiveTab] = useState<"overview" | "texts">("overview");
+
+	// State cho Text Management
+	const [texts, setTexts] = useState<any[]>([]);
+	const [textsLoading, setTextsLoading] = useState(false);
+	const [editingTextId, setEditingTextId] = useState<string | null>(null);
+	const [editContent, setEditContent] = useState("");
+	const [isAddingNew, setIsAddingNew] = useState(false);
+	const [newTextContent, setNewTextContent] = useState("");
 
 	const fetchStats = async () => {
 		try {
@@ -40,11 +54,71 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	};
 
 	useEffect(() => {
-		fetchStats();
-		// Refresh mỗi 10 giây
-		const interval = setInterval(fetchStats, 10000);
-		return () => clearInterval(interval);
-	}, []);
+		if (activeTab === "overview") {
+			fetchStats();
+			const interval = setInterval(fetchStats, 10000);
+			return () => clearInterval(interval);
+		} else if (activeTab === "texts") {
+			fetchTexts();
+		}
+	}, [activeTab]);
+
+	const fetchTexts = async () => {
+		setTextsLoading(true);
+		try {
+			const res = await fetch("http://localhost:5000/api/admin/texts");
+			const data = await res.json();
+			setTexts(data);
+		} catch (error) {
+			console.error("Lỗi lấy danh sách văn bản:", error);
+		} finally {
+			setTextsLoading(false);
+		}
+	};
+
+	const handleAddText = async () => {
+		if (!newTextContent.trim()) return;
+		try {
+			await fetch("http://localhost:5000/api/admin/texts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ content: newTextContent }),
+			});
+			setNewTextContent("");
+			setIsAddingNew(false);
+			fetchTexts();
+		} catch (error) {
+			console.error("Lỗi thêm văn bản:", error);
+		}
+	};
+
+	const handleUpdateText = async (id: string) => {
+		if (!editContent.trim()) return;
+		try {
+			await fetch(`http://localhost:5000/api/admin/texts/${id}`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ content: editContent }),
+			});
+			setEditingTextId(null);
+			setEditContent("");
+			fetchTexts();
+		} catch (error) {
+			console.error("Lỗi cập nhật văn bản:", error);
+		}
+	};
+
+	const handleDeleteText = async (id: string) => {
+		if (!window.confirm("Bạn có chắc chắn muốn xoá văn bản này?")) return;
+		try {
+			await fetch(`http://localhost:5000/api/admin/texts/${id}`, {
+				method: "DELETE",
+			});
+			fetchTexts();
+		} catch (error) {
+			console.error("Lỗi xoá văn bản:", error);
+		}
+	};
 
 	const handleDeleteUser = async (username: string) => {
 		if (!window.confirm(`Bạn có chắc chắn muốn xóa người dùng ${username} vĩnh viễn không?`)) return;
@@ -92,14 +166,41 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 			</nav>
 
 			<main className="p-8 max-w-7xl mx-auto">
-				<header className="mb-12">
-					<h2 className="text-4xl font-black mb-2 uppercase tracking-tighter">
-						System Overview
-					</h2>
-					<div className="h-1 w-20 bg-[#ff1744]"></div>
+				<header className="mb-8 flex justify-between items-end">
+					<div>
+						<h2 className="text-4xl font-black mb-2 uppercase tracking-tighter">
+							{activeTab === "overview" ? "System Overview" : "Text Management"}
+						</h2>
+						<div className="h-1 w-20 bg-[#ff1744]"></div>
+					</div>
+					
+					{/* Tab Navigation */}
+					<div className="flex bg-[#14141f] p-1 rounded-lg border border-white/10">
+						<button
+							onClick={() => setActiveTab("overview")}
+							className={`px-4 py-2 rounded-md font-bold text-sm transition-all flex items-center gap-2 ${
+								activeTab === "overview" 
+									? "bg-[#ff1744] text-white shadow-lg" 
+									: "text-gray-400 hover:text-white"
+							}`}
+						>
+							<Activity className="w-4 h-4" /> Overview
+						</button>
+						<button
+							onClick={() => setActiveTab("texts")}
+							className={`px-4 py-2 rounded-md font-bold text-sm transition-all flex items-center gap-2 ${
+								activeTab === "texts" 
+									? "bg-[#ff1744] text-white shadow-lg" 
+									: "text-gray-400 hover:text-white"
+							}`}
+						>
+							<FileText className="w-4 h-4" /> Racing Texts
+						</button>
+					</div>
 				</header>
 
-				{loading && !stats ? (
+				{activeTab === "overview" && (
+					loading && !stats ? (
 					<div className="flex justify-center items-center h-64">
 						<Loader2 className="w-12 h-12 text-[#ff1744] animate-spin" />
 					</div>
@@ -208,6 +309,100 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 							</table>
 						</div>
 					</>
+				)
+				)}
+
+				{activeTab === "texts" && (
+					<div className="space-y-6">
+						<div className="flex justify-end">
+							<Button 
+								onClick={() => setIsAddingNew(true)}
+								className="bg-[#00ff00]/20 hover:bg-[#00ff00]/30 text-[#00ff00] border border-[#00ff00]/50 font-bold"
+							>
+								<Plus className="w-5 h-5 mr-2" /> Add New Text
+							</Button>
+						</div>
+
+						{isAddingNew && (
+							<div className="bg-[#14141f] border border-[#00ff00]/30 p-6 rounded-xl">
+								<h3 className="text-[#00ff00] font-bold mb-4 flex items-center gap-2">
+									<Plus className="w-5 h-5" /> Mới
+								</h3>
+								<textarea
+									value={newTextContent}
+									onChange={(e) => setNewTextContent(e.target.value)}
+									className="w-full h-32 bg-[#0a0a0f] border border-white/10 rounded-lg p-4 text-white resize-none focus:outline-none focus:border-[#00ff00]/50"
+									placeholder="Nhập nội dung văn bản đua ở đây..."
+								></textarea>
+								<div className="flex justify-end gap-3 mt-4">
+									<Button onClick={() => setIsAddingNew(false)} variant="ghost" className="text-gray-400">
+										Huỷ
+									</Button>
+									<Button onClick={handleAddText} className="bg-[#00ff00] hover:bg-[#00cc00] text-black font-bold">
+										<Save className="w-4 h-4 mr-2" /> Lưu
+									</Button>
+								</div>
+							</div>
+						)}
+
+						{textsLoading ? (
+							<div className="flex justify-center items-center h-32">
+								<Loader2 className="w-8 h-8 text-[#ff1744] animate-spin" />
+							</div>
+						) : (
+							<div className="grid grid-cols-1 gap-4">
+								{texts.map((text, index) => (
+									<div key={text.id} className="bg-[#14141f] border border-white/5 rounded-xl overflow-hidden hover:border-[#ff1744]/20 transition-colors">
+										{editingTextId === text.id ? (
+											<div className="p-6">
+												<textarea
+													value={editContent}
+													onChange={(e) => setEditContent(e.target.value)}
+													className="w-full h-32 bg-[#0a0a0f] border border-[#00d9ff]/50 rounded-lg p-4 text-white resize-none focus:outline-none"
+												></textarea>
+												<div className="flex justify-end gap-3 mt-4">
+													<Button onClick={() => setEditingTextId(null)} variant="ghost" className="text-gray-400">
+														<X className="w-4 h-4 mr-2" /> Huỷ
+													</Button>
+													<Button onClick={() => handleUpdateText(text.id)} className="bg-[#00d9ff] hover:bg-[#00b3cc] text-black font-bold">
+														<Save className="w-4 h-4 mr-2" /> Cập nhật
+													</Button>
+												</div>
+											</div>
+										) : (
+											<div className="p-6 flex flex-col md:flex-row gap-6 items-start">
+												<div className="bg-white/5 px-3 py-1 rounded text-gray-500 font-mono text-sm shrink-0">
+													#{index + 1}
+												</div>
+												<div className="flex-1 text-gray-300 leading-relaxed text-lg">
+													{text.content}
+												</div>
+												<div className="flex flex-row md:flex-col gap-2 shrink-0">
+													<button
+														onClick={() => {
+															setEditingTextId(text.id);
+															setEditContent(text.content);
+														}}
+														className="p-2 bg-white/5 hover:bg-[#00d9ff]/20 text-gray-400 hover:text-[#00d9ff] rounded transition-colors"
+														title="Sửa"
+													>
+														<Edit className="w-5 h-5" />
+													</button>
+													<button
+														onClick={() => handleDeleteText(text.id)}
+														className="p-2 bg-white/5 hover:bg-[#ff1744]/20 text-gray-400 hover:text-[#ff1744] rounded transition-colors"
+														title="Xoá"
+													>
+														<Trash2 className="w-5 h-5" />
+													</button>
+												</div>
+											</div>
+										)}
+									</div>
+								))}
+							</div>
+						)}
+					</div>
 				)}
 			</main>
 		</div>

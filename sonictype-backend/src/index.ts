@@ -565,6 +565,69 @@ app.put(
 	},
 );
 
+// 4. API Lấy danh sách toàn bộ văn bản đua
+app.get("/api/admin/texts", async (req: Request, res: Response) => {
+	try {
+		const texts = await prisma.raceText.findMany();
+		res.json(texts);
+	} catch (error) {
+		console.error("Lỗi lấy danh sách văn bản:", error);
+		res.status(500).json({ error: "Could not fetch texts." });
+	}
+});
+
+// 5. API Tạo mới văn bản đua
+app.post("/api/admin/texts", async (req: Request, res: Response) => {
+	try {
+		const { content } = req.body;
+		if (!content || content.trim().length === 0) {
+			res.status(400).json({ error: "Content cannot be empty." });
+			return;
+		}
+		const newText = await prisma.raceText.create({
+			data: { content },
+		});
+		res.status(201).json(newText);
+	} catch (error) {
+		console.error("Lỗi tạo văn bản:", error);
+		res.status(500).json({ error: "Could not create text." });
+	}
+});
+
+// 6. API Cập nhật văn bản đua
+app.put("/api/admin/texts/:id", async (req: Request, res: Response) => {
+	try {
+		const id = req.params.id;
+		const { content } = req.body;
+		if (!content || content.trim().length === 0) {
+			res.status(400).json({ error: "Content cannot be empty." });
+			return;
+		}
+		const updatedText = await prisma.raceText.update({
+			where: { id },
+			data: { content },
+		});
+		res.json(updatedText);
+	} catch (error) {
+		console.error("Lỗi cập nhật văn bản:", error);
+		res.status(500).json({ error: "Could not update text." });
+	}
+});
+
+// 7. API Xoá văn bản đua
+app.delete("/api/admin/texts/:id", async (req: Request, res: Response) => {
+	try {
+		const id = req.params.id;
+		await prisma.raceText.delete({
+			where: { id },
+		});
+		res.json({ message: "Text deleted successfully!" });
+	} catch (error) {
+		console.error("Lỗi xoá văn bản:", error);
+		res.status(500).json({ error: "Could not delete text." });
+	}
+});
+
 // 5. Bật Server
 httpServer.listen(PORT, () => {
 	console.log(`✅ Server SonicType đang chạy tại http://localhost:${PORT}`);
