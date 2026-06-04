@@ -135,8 +135,7 @@ export function MainMenu({ username, onSelectMode, onLogout }: MainMenuProps) {
             description="Perfect your typing skills in a solo environment. Track your WPM, accuracy, and progress without pressure."
             features={[
               "Real-time WPM tracking",
-              "Accuracy statistics",
-              "No time pressure"
+              "Accuracy statistics"
             ]}
             buttonText="START PRACTICE"
             buttonGradient="from-[#ffd700] to-[#ff4500]"
@@ -153,8 +152,7 @@ export function MainMenu({ username, onSelectMode, onLogout }: MainMenuProps) {
             features={[
               "Global leaderboard",
               "Room-based matches",
-              "Live competition",
-              "Earn achievements"
+              "Live competition"
             ]}
             buttonText="ENTER COMPETITION"
             buttonGradient="from-[#00d9ff] to-[#ffd700]"
