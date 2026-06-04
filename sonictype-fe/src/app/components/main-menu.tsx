@@ -136,7 +136,6 @@ export function MainMenu({ username, onSelectMode, onLogout }: MainMenuProps) {
             features={[
               "Real-time WPM tracking",
               "Accuracy statistics",
-              "Personal best records",
               "No time pressure"
             ]}
             buttonText="START PRACTICE"
