@@ -1,5 +1,6 @@
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Zap, Trophy, Target, User, LogOut, Crown, Flame } from "lucide-react";
+import { Zap, Trophy, Target, User, LogOut, Crown, Flame, History, X, Calendar, Activity } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 
 interface MainMenuProps {
@@ -9,6 +10,39 @@ interface MainMenuProps {
 }
 
 export function MainMenu({ username, onSelectMode, onLogout }: MainMenuProps) {
+  const [stats, setStats] = useState({
+    bestWpm: 0,
+    accuracy: 0,
+    globalRank: "--" as string | number,
+    averageWpm: 0,
+    history: [] as any[]
+  });
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const storedUser = localStorage.getItem("sonictype_user");
+        if (!storedUser) return;
+        const userObj = JSON.parse(storedUser);
+        const res = await fetch(`http://localhost:5000/api/users/${userObj.id}/stats`);
+        if (res.ok) {
+          const data = await res.json();
+          setStats({
+            bestWpm: data.bestWpm || 0,
+            accuracy: data.accuracy || 0,
+            globalRank: data.globalRank || "--",
+            averageWpm: data.averageWpm || 0,
+            history: data.history || []
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching stats:", err);
+      }
+    };
+    fetchStats();
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] relative overflow-hidden">
       {/* Animated background effects */}
@@ -137,28 +171,116 @@ export function MainMenu({ username, onSelectMode, onLogout }: MainMenuProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
         >
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <StatCard
               icon={<Flame className="w-8 h-8 text-[#ff4500]" />}
               label="Best WPM"
-              value="0"
+              value={stats.bestWpm.toString()}
               color="text-[#ff4500]"
+            />
+            <StatCard
+              icon={<Activity className="w-8 h-8 text-[#00ff00]" />}
+              label="Average WPM"
+              value={stats.averageWpm.toString()}
+              color="text-[#00ff00]"
             />
             <StatCard
               icon={<Target className="w-8 h-8 text-[#ffd700]" />}
               label="Accuracy"
-              value="0%"
+              value={`${stats.accuracy}%`}
               color="text-[#ffd700]"
             />
             <StatCard
               icon={<Crown className="w-8 h-8 text-[#00d9ff]" />}
               label="Global Rank"
-              value="--"
+              value={stats.globalRank.toString()}
               color="text-[#00d9ff]"
             />
           </div>
+
+          <div className="mt-8 text-center">
+            <Button
+              onClick={() => setIsHistoryOpen(true)}
+              variant="outline"
+              className="border-[#00d9ff]/30 text-[#00d9ff] hover:bg-[#00d9ff]/10 bg-transparent h-12 px-8 font-bold text-lg"
+            >
+              <History className="w-5 h-5 mr-2" />
+              VIEW MATCH HISTORY
+            </Button>
+          </div>
         </motion.div>
       </div>
+
+      {/* Match History Modal */}
+      {isHistoryOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#14141f] border border-[#00d9ff]/30 rounded-2xl p-6 w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl shadow-[#00d9ff]/20"
+          >
+            <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+              <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                <History className="w-6 h-6 text-[#00d9ff]" />
+                MATCH HISTORY
+              </h2>
+              <button 
+                onClick={() => setIsHistoryOpen(false)}
+                className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+              {stats.history.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <History className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                  <p>No matches played yet. Start racing to build your history!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {stats.history.map((match: any) => (
+                    <div 
+                      key={match.id} 
+                      className="bg-[#0a0a0f] border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4 hover:border-[#00d9ff]/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-4 w-full sm:w-auto">
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${match.mode === 'RANKED' ? 'bg-[#ffd700]/10 text-[#ffd700]' : 'bg-[#00d9ff]/10 text-[#00d9ff]'}`}>
+                          {match.mode === 'RANKED' ? <Trophy className="w-6 h-6" /> : <Target className="w-6 h-6" />}
+                        </div>
+                        <div>
+                          <div className="font-bold text-white mb-1 flex items-center gap-2">
+                            {match.mode === 'RANKED' ? 'Ranked Match' : 'Solo Practice'}
+                            <span className="text-xs px-2 py-0.5 rounded bg-white/10 text-gray-400 font-normal">
+                              {new Date(match.playedAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(match.playedAt).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-6 w-full sm:w-auto justify-around sm:justify-end">
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Speed</p>
+                          <p className="text-xl font-black text-white">{match.wpm} <span className="text-xs font-normal text-gray-400">WPM</span></p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500 mb-1 uppercase tracking-wider">Accuracy</p>
+                          <p className="text-xl font-bold text-[#ffd700]">{match.accuracy}%</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

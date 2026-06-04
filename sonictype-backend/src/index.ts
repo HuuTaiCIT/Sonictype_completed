@@ -431,9 +431,23 @@ app.get("/api/users/:userId/stats", async (req: Request, res: Response) => {
 		});
 
 		if (!bestMatch) {
-			res.json({ bestWpm: 0, accuracy: 0, globalRank: "--" });
+			res.json({ bestWpm: 0, accuracy: 0, globalRank: "--", averageWpm: 0, history: [] });
 			return;
 		}
+
+		// 1.5 Tính tốc độ gõ trung bình và lấy lịch sử đấu
+		const [avgStats, history] = await Promise.all([
+			prisma.matchHistory.aggregate({
+				where: { userId: userId },
+				_avg: { wpm: true },
+			}),
+			prisma.matchHistory.findMany({
+				where: { userId: userId },
+				orderBy: { playedAt: "desc" },
+				take: 20,
+			})
+		]);
+		const averageWpm = Math.round(avgStats._avg.wpm || 0);
 
 		// 2. Lấy điểm cao nhất của TẤT CẢ mọi người để xếp hạng
 		const allUsersBest = await prisma.matchHistory.groupBy({
@@ -453,6 +467,8 @@ app.get("/api/users/:userId/stats", async (req: Request, res: Response) => {
 			bestWpm: bestMatch.wpm,
 			accuracy: bestMatch.accuracy,
 			globalRank: globalRank,
+			averageWpm: averageWpm,
+			history: history,
 		});
 	} catch (error) {
 		console.error(error); // 👈 Báo log cụ thể ở server nếu bị lỗi 500
