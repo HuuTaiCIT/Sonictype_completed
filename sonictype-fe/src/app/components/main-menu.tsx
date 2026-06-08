@@ -23,9 +23,14 @@ export function MainMenu({ username, onSelectMode, onLogout }: MainMenuProps) {
     const fetchStats = async () => {
       try {
         const storedUser = localStorage.getItem("sonictype_user");
+        const token = localStorage.getItem("sonictype_token");
         if (!storedUser) return;
         const userObj = JSON.parse(storedUser);
-        const res = await fetch(`http://localhost:5000/api/users/${userObj.id}/stats`);
+        const res = await fetch(`http://localhost:5000/api/users/${userObj.id}/stats`, {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
         if (res.ok) {
           const data = await res.json();
           setStats({

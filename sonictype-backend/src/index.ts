@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import cors from "cors";
 import dotenv from "dotenv";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import express from "express";
 import { createServer } from "http";
 import jwt from "jsonwebtoken";
@@ -52,13 +52,30 @@ io.on("connection", (socket) => {
 
 	// 2. Nhận yêu cầu TẠO PHÒNG từ Frontend
 	socket.on("createRoom", (roomData) => {
-		socket.data.username = roomData.host;
+		const host = typeof roomData.host === "string" ? roomData.host.trim() : "";
+
+		if (!host) {
+			socket.emit("roomCreateError", "Không xác định được người tạo phòng.");
+			return;
+		}
+
+		// Một user chỉ được tạo/sở hữu một phòng đang tồn tại tại cùng một thời điểm.
+		const existingHostedRoom = activeRooms.find((room) => room.host === host);
+		if (existingHostedRoom) {
+			socket.emit(
+				"roomCreateError",
+				`Bạn đã có phòng "${existingHostedRoom.name}". Hãy rời hoặc giải tán phòng đó trước khi tạo phòng mới.`,
+			);
+			return;
+		}
+
+		socket.data.username = host;
 		const newRoom = {
 			id: Math.random().toString(36).substring(2, 9),
 			name: roomData.name,
-			host: roomData.host,
+			host: host,
 			hostSocketId: socket.id,
-			players: [roomData.host],
+			players: [host],
 			readyPlayers: [],
 			finishedPlayers: [],
 			maxPlayers: roomData.maxPlayers || 4,
@@ -270,6 +287,45 @@ initDB();
 
 const PORT = process.env.PORT || 5001;
 
+interface AuthenticatedRequest extends Request {
+	user?: {
+		userId: string;
+		role: string;
+	};
+}
+
+const authenticateJWT = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+	const authHeader = req.headers.authorization;
+
+	if (authHeader) {
+		const token = authHeader.split(" ")[1]; // Authorization: Bearer <token>
+		if (!token) {
+			res.status(401).json({ error: "Access token is missing." });
+			return;
+		}
+		const secretKey = process.env.JWT_SECRET || "fallback_secret";
+
+		jwt.verify(token, secretKey as string, (err, user: any) => {
+			if (err) {
+				res.status(403).json({ error: "Access token is invalid or expired." });
+				return;
+			}
+			req.user = user;
+			next();
+		});
+	} else {
+		res.status(401).json({ error: "Authorization header is missing." });
+	}
+};
+
+const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+	if (req.user && req.user.role === "ADMIN") {
+		next();
+	} else {
+		res.status(403).json({ error: "Access denied. Admin role required." });
+	}
+};
+
 // 2. Cài đặt Middleware
 app.use(cors());
 app.use(express.json());
@@ -281,9 +337,16 @@ app.get("/", (req: Request, res: Response) => {
 	);
 });
 
-app.get("/api/users", async (req: Request, res: Response) => {
+app.get("/api/users", authenticateJWT as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
-		const users = await prisma.user.findMany();
+		const users = await prisma.user.findMany({
+			select: {
+				id: true,
+				username: true,
+				role: true,
+				createdAt: true,
+			},
+		});
 		res.json(users);
 	} catch (error) {
 		res.status(500).json({ error: "Error fetching data from Database" });
@@ -355,10 +418,16 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
 	}
 });
 
-// API Lưu điểm
-app.post("/api/matches", async (req: Request, res: Response) => {
+app.post("/api/matches", authenticateJWT as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
 		const { userId, wpm, accuracy, mode } = req.body;
+
+		// Kiểm tra tính chính danh (Không cho phép lưu điểm hộ người khác)
+		if (userId !== req.user?.userId && req.user?.role !== "ADMIN") {
+			res.status(403).json({ error: "Access denied. Cannot save score for another user." });
+			return;
+		}
+
 		const newMatch = await prisma.matchHistory.create({
 			data: {
 				userId: userId,
@@ -396,12 +465,12 @@ app.get("/api/matches/leaderboard", async (req: Request, res: Response) => {
 		const topMatches = usersWithBestMatch
 			.filter((u) => u.matchHistory.length > 0)
 			.map((u) => ({
-				id: u.matchHistory[0].id,
+				id: u.matchHistory[0]!.id,
 				userId: u.id,
-				wpm: u.matchHistory[0].wpm,
-				accuracy: u.matchHistory[0].accuracy,
-				mode: u.matchHistory[0].mode,
-				createdAt: u.matchHistory[0].playedAt,
+				wpm: u.matchHistory[0]!.wpm,
+				accuracy: u.matchHistory[0]!.accuracy,
+				mode: u.matchHistory[0]!.mode,
+				createdAt: u.matchHistory[0]!.playedAt,
 				user: { username: u.username },
 			}))
 			.sort((a, b) => b.wpm - a.wpm)
@@ -414,10 +483,9 @@ app.get("/api/matches/leaderboard", async (req: Request, res: Response) => {
 	}
 });
 
-// API Lấy thống kê cá nhân và Thứ hạng của một User cụ thể
-app.get("/api/users/:userId/stats", async (req: Request, res: Response) => {
+app.get("/api/users/:userId/stats", authenticateJWT as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
-		const userId = req.params.userId; // 👈 ĐÃ XÓA parseInt()
+		const userId = req.params.userId as string;
 
 		if (!userId) {
 			res.status(400).json({ error: "Missing user ID" });
@@ -447,7 +515,7 @@ app.get("/api/users/:userId/stats", async (req: Request, res: Response) => {
 				take: 20,
 			})
 		]);
-		const averageWpm = Math.round(avgStats._avg.wpm || 0);
+		const averageWpm = Math.round(avgStats._avg?.wpm || 0);
 
 		// 2. Lấy điểm cao nhất của TẤT CẢ mọi người để xếp hạng
 		const allUsersBest = await prisma.matchHistory.groupBy({
@@ -494,7 +562,7 @@ app.get("/api/texts/random", async (req: Request, res: Response) => {
 // ==========================================
 
 // 1. API Lấy toàn cảnh hệ thống (Tổng User, Số phòng, User mới nhất)
-app.get("/api/admin/stats", async (req: Request, res: Response) => {
+app.get("/api/admin/stats", authenticateJWT as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
 		const totalUsers = await prisma.user.count();
 		const activeRoomsCount = activeRooms.length;
@@ -543,9 +611,11 @@ app.get("/api/admin/stats", async (req: Request, res: Response) => {
 // 2. API Xóa tài khoản (Trảm User)
 app.delete(
 	"/api/admin/users/:username",
-	async (req: Request, res: Response) => {
+	authenticateJWT as any,
+	requireAdmin as any,
+	async (req: AuthenticatedRequest, res: Response) => {
 		try {
-			const username = req.params.username;
+			const username = req.params.username as string;
 			const user = await prisma.user.findUnique({ where: { username } });
 
 			if (user) {
@@ -566,9 +636,11 @@ app.delete(
 // 3. API Nâng quyền tài khoản lên ADMIN
 app.put(
 	"/api/admin/users/:username/role",
-	async (req: Request, res: Response) => {
+	authenticateJWT as any,
+	requireAdmin as any,
+	async (req: AuthenticatedRequest, res: Response) => {
 		try {
-			const username = req.params.username;
+			const username = req.params.username as string;
 			await prisma.user.update({
 				where: { username },
 				data: { role: "ADMIN" },
@@ -582,7 +654,7 @@ app.put(
 );
 
 // 4. API Lấy danh sách toàn bộ văn bản đua
-app.get("/api/admin/texts", async (req: Request, res: Response) => {
+app.get("/api/admin/texts", authenticateJWT as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
 		const texts = await prisma.raceText.findMany();
 		res.json(texts);
@@ -593,7 +665,7 @@ app.get("/api/admin/texts", async (req: Request, res: Response) => {
 });
 
 // 5. API Tạo mới văn bản đua
-app.post("/api/admin/texts", async (req: Request, res: Response) => {
+app.post("/api/admin/texts", authenticateJWT as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
 		const { content } = req.body;
 		if (!content || content.trim().length === 0) {
@@ -611,9 +683,9 @@ app.post("/api/admin/texts", async (req: Request, res: Response) => {
 });
 
 // 6. API Cập nhật văn bản đua
-app.put("/api/admin/texts/:id", async (req: Request, res: Response) => {
+app.put("/api/admin/texts/:id", authenticateJWT as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
-		const id = req.params.id;
+		const id = req.params.id as string;
 		const { content } = req.body;
 		if (!content || content.trim().length === 0) {
 			res.status(400).json({ error: "Content cannot be empty." });
@@ -631,9 +703,9 @@ app.put("/api/admin/texts/:id", async (req: Request, res: Response) => {
 });
 
 // 7. API Xoá văn bản đua
-app.delete("/api/admin/texts/:id", async (req: Request, res: Response) => {
+app.delete("/api/admin/texts/:id", authenticateJWT as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
 	try {
-		const id = req.params.id;
+		const id = req.params.id as string;
 		await prisma.raceText.delete({
 			where: { id },
 		});

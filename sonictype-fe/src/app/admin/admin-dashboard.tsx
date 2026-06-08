@@ -43,7 +43,12 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 
 	const fetchStats = async () => {
 		try {
-			const res = await fetch("http://localhost:5000/api/admin/stats");
+			const token = localStorage.getItem("sonictype_token");
+			const res = await fetch("http://localhost:5000/api/admin/stats", {
+				headers: {
+					"Authorization": `Bearer ${token}`
+				}
+			});
 			const data = await res.json();
 			setStats(data);
 		} catch (error) {
@@ -66,7 +71,12 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	const fetchTexts = async () => {
 		setTextsLoading(true);
 		try {
-			const res = await fetch("http://localhost:5000/api/admin/texts");
+			const token = localStorage.getItem("sonictype_token");
+			const res = await fetch("http://localhost:5000/api/admin/texts", {
+				headers: {
+					"Authorization": `Bearer ${token}`
+				}
+			});
 			const data = await res.json();
 			if (Array.isArray(data)) {
 				setTexts(data);
@@ -84,9 +94,13 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	const handleAddText = async () => {
 		if (!newTextContent.trim()) return;
 		try {
+			const token = localStorage.getItem("sonictype_token");
 			await fetch("http://localhost:5000/api/admin/texts", {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: { 
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${token}`
+				},
 				body: JSON.stringify({ content: newTextContent }),
 			});
 			setNewTextContent("");
@@ -100,9 +114,13 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	const handleUpdateText = async (id: string) => {
 		if (!editContent.trim()) return;
 		try {
+			const token = localStorage.getItem("sonictype_token");
 			await fetch(`http://localhost:5000/api/admin/texts/${id}`, {
 				method: "PUT",
-				headers: { "Content-Type": "application/json" },
+				headers: { 
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${token}`
+				},
 				body: JSON.stringify({ content: editContent }),
 			});
 			setEditingTextId(null);
@@ -116,8 +134,12 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	const handleDeleteText = async (id: string) => {
 		if (!window.confirm("Bạn có chắc chắn muốn xoá văn bản này?")) return;
 		try {
+			const token = localStorage.getItem("sonictype_token");
 			await fetch(`http://localhost:5000/api/admin/texts/${id}`, {
 				method: "DELETE",
+				headers: {
+					"Authorization": `Bearer ${token}`
+				}
 			});
 			fetchTexts();
 		} catch (error) {
@@ -128,8 +150,12 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	const handleDeleteUser = async (username: string) => {
 		if (!window.confirm(`Bạn có chắc chắn muốn xóa người dùng ${username} vĩnh viễn không?`)) return;
 		try {
+			const token = localStorage.getItem("sonictype_token");
 			await fetch(`http://localhost:5000/api/admin/users/${username}`, {
 				method: "DELETE",
+				headers: {
+					"Authorization": `Bearer ${token}`
+				}
 			});
 			fetchStats();
 		} catch (error) {
@@ -140,8 +166,12 @@ export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
 	const handlePromoteUser = async (username: string) => {
 		if (!window.confirm(`Thăng cấp ${username} lên Admin?`)) return;
 		try {
+			const token = localStorage.getItem("sonictype_token");
 			await fetch(`http://localhost:5000/api/admin/users/${username}/role`, {
 				method: "PUT",
+				headers: {
+					"Authorization": `Bearer ${token}`
+				}
 			});
 			fetchStats();
 		} catch (error) {

@@ -73,12 +73,16 @@ export function SoloMode({ onBack }: SoloModeProps) {
   useEffect(() => {
     if (state.isFinished) {
       const userStr = localStorage.getItem("sonictype_user");
+      const token = localStorage.getItem("sonictype_token");
       if (userStr) {
         try {
           const userObj = JSON.parse(userStr);
           fetch("http://localhost:5000/api/matches", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
             body: JSON.stringify({
               userId: userObj.id,
               wpm: state.stats.wpm,

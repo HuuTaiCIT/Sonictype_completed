@@ -48,8 +48,14 @@ export function Leaderboard({ username }: LeaderboardProps) {
       if (storedUser) {
         const parsed = JSON.parse(storedUser);
         if (parsed?.id) {
+          const token = localStorage.getItem("sonictype_token");
           const statsRes = await fetch(
-            `${BACKEND_URL}/api/users/${parsed.id}/stats`
+            `${BACKEND_URL}/api/users/${parsed.id}/stats`,
+            {
+              headers: {
+                "Authorization": `Bearer ${token}`
+              }
+            }
           );
           if (statsRes.ok) {
             const statsData: UserStats = await statsRes.json();
